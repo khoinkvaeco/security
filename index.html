@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kiểm tra thẻ VAECO</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="window.onGisLoad && onGisLoad()"></script>
+<style>
+  :root{--bg:#f3f5f7;--panel:#fff;--ink:#14202b;--muted:#5d6b78;--line:#d6dde3;--accent:#0b5fa5;--accent-ink:#fff;
+    --ok:#1d7a46;--ok-bg:#e3f4ea;--err:#b42318;--err-bg:#fde8e6;--warn:#9a6700;--mono:ui-monospace,Menlo,Consolas,monospace;color-scheme:light}
+  @media (prefers-color-scheme:dark){:root{--bg:#0f151b;--panel:#17212a;--ink:#e6edf3;--muted:#93a1ae;--line:#2a3743;--accent:#4ea1e6;--accent-ink:#06121c;
+    --ok:#4cc38a;--ok-bg:#12301f;--err:#ff7b72;--err-bg:#3a1512;--warn:#e3b341;color-scheme:dark}}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Roboto,Arial,sans-serif}
+  main{max-width:640px;margin:0 auto;padding:12px 16px 24px;display:grid;gap:10px}
+  header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  h1{font-size:18px;margin:0}
+  h1 small{display:block;font-size:12px;font-weight:400;color:var(--muted)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:10px}
+  button,.btn{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+  button:disabled{opacity:.5;cursor:default}
+  .primary{background:var(--accent)!important;border-color:var(--accent)!important;color:var(--accent-ink)!important;font-weight:600}
+  .good{background:var(--ok)!important;border-color:var(--ok)!important;color:#fff!important;font-weight:600}
+  .bad{background:var(--err)!important;border-color:var(--err)!important;color:#fff!important;font-weight:600}
+  .small{padding:6px 10px;font-size:13px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row>*{flex:1 1 auto}
+  input[type=text]{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0}
+  .codein{font-family:var(--mono)!important;text-transform:uppercase}
+  #reader{width:100%;border-radius:8px;overflow:hidden;background:#000}
+  .status{font-size:14px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
+  .ok{color:var(--ok)}.err{color:var(--err)}.warn{color:var(--warn)}
+  .meta{color:var(--muted);font-size:13px}
+  .banner{border-radius:8px;padding:10px 12px;font-weight:700;display:grid;gap:2px}
+  .banner .code{font-family:var(--mono);font-size:22px}
+  .banner.okb{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+  .banner.errb{background:var(--err-bg);color:var(--err);border:1px solid var(--err)}
+  .banner span{font-weight:400;font-size:13px}
+  #photo{width:100%;border-radius:8px;background:var(--bg);display:block;min-height:160px;cursor:zoom-in}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-family:var(--mono);font-size:12px;padding:6px 8px}
+  .chip[aria-current=true]{border-color:var(--accent);color:var(--accent);font-weight:700}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0}
+  .stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
+  .stat span{font-size:12px;color:var(--muted)}
+  .stat.main b{color:var(--accent)}
+  details summary{cursor:pointer;font-size:13px;color:var(--muted)}
+  #code-list{max-height:240px;overflow:auto;margin-top:8px}
+  #zoom{position:fixed;inset:0;background:#000;z-index:10;overflow:auto}
+  #zoom img{width:100%;display:block}
+  #zoom button{position:fixed;top:10px;right:10px;background:#000c;color:#fff}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Kiểm tra thẻ ngẫu nhiên<small>Quét QR / barcode VAEC0-xxxx</small></h1>
+    <div id="who" class="meta" style="text-align:right" hidden>
+      <div id="who-email"></div>
+      <button id="btn-logout" class="small" type="button">Đăng xuất</button>
+    </div>
+  </header>
+
+  <section id="login" class="panel">
+    <div>Đăng nhập bằng tài khoản Google đã được cấp quyền xem thư mục ảnh thẻ.</div>
+    <button id="btn-login" class="primary" type="button" disabled>Đang tải…</button>
+    <div id="login-msg" class="meta"></div>
+  </section>
+
+  <div id="app" hidden style="display:grid;gap:10px">
+    <section class="panel">
+      <div class="stats">
+        <div class="stat main"><b id="s-cards">…</b><span>Thẻ trong công ty</span></div>
+        <div class="stat"><b id="s-today">0</b><span>Bạn đã kiểm tra hôm nay</span></div>
+        <div class="stat"><b id="s-bad" class="err">0</b><span>Vi phạm hôm nay</span></div>
+      </div>
+      <div class="row" style="align-items:center">
+        <span id="s-meta" class="meta">Đang đếm…</span>
+        <button id="btn-refresh" class="small" type="button" style="flex:0 0 auto">Làm mới</button>
+      </div>
+      <details>
+        <summary>Danh sách mã thẻ</summary>
+        <input id="list-filter" class="codein" type="text" placeholder="Lọc mã…" autocomplete="off" style="margin-top:8px">
+        <div id="code-list" class="chips"></div>
+      </details>
+    </section>
+
+    <section class="panel">
+      <input id="place" type="text" placeholder="Vị trí kiểm tra (vd: Cổng 1, Hangar A2)" autocomplete="off">
+      <div class="row">
+        <button id="btn-cam" class="primary" type="button">Mở camera quét</button>
+        <label class="btn" style="flex:0 1 auto">Chụp ảnh mã
+          <input id="file-input" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+      <div id="reader" hidden></div>
+      <div id="reader-file" hidden></div>
+      <form id="manual" class="row">
+        <input id="code-input" class="codein" type="text" placeholder="Nhập tay: VAEC0-2B0014" autocomplete="off" style="flex:1 1 160px">
+        <button type="submit" style="flex:0 0 auto">Tìm</button>
+      </form>
+      <div id="status" class="status">Bấm "Mở camera quét" để kiểm tra thẻ.</div>
+    </section>
+
+    <section id="result" class="panel" hidden>
+      <div id="banner" class="banner"></div>
+      <img id="photo" alt="Ảnh đăng ký của thẻ" hidden>
+      <div id="r-meta" class="meta"></div>
+      <div id="chips" class="chips"></div>
+      <div id="verify" class="row">
+        <button id="btn-match" class="good" type="button">Đúng người</button>
+        <button id="btn-nomatch" class="bad" type="button">Không khớp</button>
+      </div>
+      <input id="note" type="text" placeholder="Ghi chú (không bắt buộc)" autocomplete="off">
+      <div id="logged" class="meta"></div>
+      <div class="row">
+        <a id="r-drive" class="btn" target="_blank" rel="noopener">Mở trên Drive</a>
+        <button id="btn-next" class="primary" type="button">Kiểm tra thẻ tiếp</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div id="zoom" hidden><button type="button" id="zoom-close">Đóng</button><img id="zoom-img" alt=""></div>
+
+<script>
+// ================= CẤU HÌNH =================
+const CLIENT_ID    = 'AIzaSyBz8Zg_cqz-qu3PbiiDBrRI-bfbx5of7-0.apps.googleusercontent.com';
+const FOLDER_ID    = '1tFHCwI826iLgvOwq6lep1phwi81OsV-9';
+const LOG_SHEET_ID = '';   // ID Google Sheet ghi nhật ký kiểm tra. Để '' nếu chưa dùng.
+// ============================================
+
+const SCOPES = 'openid email https://www.googleapis.com/auth/drive.readonly' +
+               (LOG_SHEET_ID ? ' https://www.googleapis.com/auth/spreadsheets' : '');
+const DRIVE = 'https://www.googleapis.com/drive/v3/files';
+const $ = id => document.getElementById(id);
+const store = (s => ({
+  get(k){ try { return s().getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { s().setItem(k,v); } catch(e){} },
+  del(k){ try { s().removeItem(k); } catch(e){} }
+}));
+const sess = store(() => sessionStorage), local = store(() => localStorage);
+
+function setStatus(msg, kind){
+  const s = $('status');
+  s.className = 'status' + (kind ? ' ' + kind : '');
+  s.textContent = msg;
+}
+
+// ================= ĐĂNG NHẬP (Google OAuth) =================
+let tokenClient = null, token = null, tokenExp = 0, userEmail = local.get('email') || '';
+let pending = null;
+
+function onGisLoad(){
+  if (CLIENT_ID.indexOf('DAN_') === 0) { $('btn-login').textContent = 'Chưa cấu hình CLIENT_ID'; return; }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPES,
+    callback: r => {
+      if (r.error) return pending && pending.rej(new Error(r.error_description || r.error));
+      if (!google.accounts.oauth2.hasGrantedAllScopes(r, 'https://www.googleapis.com/auth/drive.readonly'))
+        return pending && pending.rej(new Error('Bạn cần tick cho phép xem file Google Drive.'));
+      token = r.access_token;
+      tokenExp = Date.now() + (Number(r.expires_in) - 60) * 1000;
+      sess.set('tok', token); sess.set('exp', String(tokenExp));
+      pending && pending.res();
+    },
+    error_callback: e => pending && pending.rej(new Error(e.type === 'popup_closed' ? 'Đã đóng cửa sổ đăng nhập.' : (e.message || e.type)))
+  });
+  $('btn-login').disabled = false;
+  $('btn-login').textContent = 'Đăng nhập Google';
+}
+
+function requestToken(){
+  return new Promise((res, rej) => {
+    if (!tokenClient) return rej(new Error('Thư viện đăng nhập chưa tải xong.'));
+    pending = { res, rej };
+    tokenClient.requestAccessToken({ prompt: '', login_hint: userEmail || undefined });
+  });
+}
+const tokenOk = (marginMs = 0) => token && Date.now() + marginMs < tokenExp;
+const ensureFresh = () => tokenOk(5 * 60 * 1000) ? Promise.resolve() : requestToken();
+
+class AuthError extends Error {}
+async function api(url, opts = {}){
+  if (!tokenOk()) { showLogin('Phiên đăng nhập đã hết hạn. Bấm đăng nhập lại.'); throw new AuthError('Phiên đăng nhập đã hết hạn.'); }
+  opts.headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.headers || {});
+  const r = await fetch(url, opts);
+  if (r.status === 401) { clearToken(); showLogin('Phiên đăng nhập đã hết hạn. Bấm đăng nhập lại.'); throw new AuthError('Phiên đăng nhập đã hết hạn.'); }
+  return r;
+}
+async function apiJson(url, opts){
+  const r = await api(url, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const m = (j.error && j.error.message) || ('Lỗi ' + r.status);
+    throw new Error(r.status === 403 || r.status === 404 ? 'Tài khoản không có quyền truy cập (' + m + ')' : m);
+  }
+  return j;
+}
+
+function clearToken(){ token = null; tokenExp = 0; sess.del('tok'); sess.del('exp'); }
+function showLogin(msg){
+  stopCam();
+  $('app').hidden = true; $('who').hidden = true; $('login').hidden = false;
+  $('login-msg').textContent = msg || '';
+}
+async function afterLogin(){
+  $('login').hidden = true; $('app').hidden = false; $('who').hidden = false;
+  try {
+    const u = await apiJson('https://www.googleapis.com/oauth2/v3/userinfo');
+    userEmail = u.email || ''; local.set('email', userEmail);
+  } catch (e) {}
+  $('who-email').textContent = userEmail;
+  renderToday();
+  loadStats();
+}
+
+$('btn-login').onclick = () => {
+  $('login-msg').textContent = '';
+  requestToken().then(afterLogin).catch(e => { $('login-msg').textContent = e.message; });
+};
+$('btn-logout').onclick = () => {
+  if (token && window.google) google.accounts.oauth2.revoke(token, () => {});
+  clearToken(); local.del('email'); userEmail = '';
+  showLogin('Đã đăng xuất.');
+};
+
+// ================= MÃ THẺ =================
+function parseCode(raw, allowBare){
+  const t = String(raw || '').trim();
+  const m = t.match(/VAEC[O0]\s*[-–—_\s]\s*([A-Za-z0-9]+)/i);
+  if (m) return m[1].toLowerCase();
+  if (allowBare && /^[A-Za-z0-9]+$/.test(t)) return t.toLowerCase();
+  return null;
+}
+const label = code => 'VAEC0-' + code.toUpperCase();
+function shotTime(name){
+  const m = name.match(/-(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\./);
+  return m ? m[2] + '/' + m[1] + ' ' + m[3] + ':' + m[4] + ':' + m[5] : '';
+}
+
+// ================= DRIVE =================
+const baseQ = "'" + FOLDER_ID + "' in parents and trashed = false and mimeType contains 'image/'";
+function listUrl(q, fields, pageToken){
+  const p = { q: q, pageSize: '1000', fields: fields, orderBy: 'modifiedTime desc',
+              supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' };
+  if (pageToken) p.pageToken = pageToken;
+  return DRIVE + '?' + new URLSearchParams(p);
+}
+async function findFiles(code){
+  const j = await apiJson(listUrl(baseQ + " and name contains '" + code + "'", 'files(id,name,size,modifiedTime)'));
+  return (j.files || []).filter(f => f.name.toLowerCase().startsWith(code + '-'));
+}
+
+// ================= THỐNG KÊ =================
+let allCodes = [];
+async function loadStats(){
+  $('s-meta').textContent = 'Đang đếm…';
+  try {
+    let pageToken = '', files = [];
+    do {
+      const j = await apiJson(listUrl(baseQ, 'nextPageToken,files(name)', pageToken));
+      files = files.concat(j.files || []);
+      pageToken = j.nextPageToken || '';
+    } while (pageToken);
+    const counts = {};
+    files.forEach(f => {
+      const i = f.name.indexOf('-');
+      if (i > 0) { const c = f.name.slice(0, i).toLowerCase(); counts[c] = (counts[c] || 0) + 1; }
+    });
+    allCodes = Object.keys(counts).sort();
+    $('s-cards').textContent = allCodes.length.toLocaleString('vi-VN');
+    $('s-meta').textContent = files.length.toLocaleString('vi-VN') + ' ảnh · cập nhật ' +
+      new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    renderList();
+  } catch (e) {
+    $('s-cards').textContent = '–';
+    $('s-meta').textContent = 'Không đếm được: ' + e.message;
+  }
+}
+function renderList(){
+  const f = $('list-filter').value.trim().toLowerCase();
+  const box = $('code-list'); box.innerHTML = '';
+  allCodes.filter(c => !f || c.includes(f)).forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = c.toUpperCase();
+    b.onclick = () => ensureFresh().then(() => { stopCam(); lookup(c); }).catch(e => setStatus(e.message, 'err'));
+    box.append(b);
+  });
+}
+$('list-filter').oninput = renderList;
+$('btn-refresh').onclick = () => ensureFresh().then(loadStats).catch(e => setStatus(e.message, 'err'));
+
+const todayKey = () => 'checks-' + new Date().toLocaleDateString('sv-SE');
+function getToday(){ try { return JSON.parse(local.get(todayKey())) || { n: 0, bad: 0 }; } catch(e){ return { n: 0, bad: 0 }; } }
+function addToday(isBad){ const t = getToday(); t.n++; if (isBad) t.bad++; local.set(todayKey(), JSON.stringify(t)); renderToday(); }
+function renderToday(){ const t = getToday(); $('s-today').textContent = t.n; $('s-bad').textContent = t.bad; }
+
+// ================= NHẬT KÝ (Google Sheet) =================
+$('place').value = local.get('place') || '';
+$('place').onchange = () => local.set('place', $('place').value.trim());
+const pad = n => String(n).padStart(2, '0');
+function nowStr(){ const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+
+async function logCheck(code, result, fileName){
+  addToday(result !== 'Đúng người');
+  if (!LOG_SHEET_ID) { $('logged').textContent = 'Đã ghi nhận trên máy này (chưa cấu hình Sheet nhật ký).'; return; }
+  $('logged').textContent = 'Đang ghi nhật ký…';
+  try {
+    await apiJson('https://sheets.googleapis.com/v4/spreadsheets/' + LOG_SHEET_ID +
+      '/values/A:G:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[ nowStr(), label(code), result, $('place').value.trim(), userEmail, fileName || '', $('note').value.trim() ]] })
+    });
+    $('logged').textContent = 'Đã ghi nhật ký lúc ' + nowStr().slice(11) + '.';
+  } catch (e) {
+    $('logged').textContent = 'Chưa ghi được nhật ký: ' + e.message;
+  }
+}
+
+// ================= CAMERA =================
+let scanner = null, fileScanner = null, scanning = false, busy = false;
+const fmts = () => Object.values(Html5QrcodeSupportedFormats).filter(v => typeof v === 'number');
+const opts = () => ({ verbose: false, formatsToSupport: fmts(), experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
+
+async function startCam(){
+  if (scanning) return;
+  $('result').hidden = true;
+  $('reader').hidden = false;
+  try {
+    setStatus('Đang mở camera…');
+    if (!scanner) scanner = new Html5Qrcode('reader', opts());
+    await scanner.start({ facingMode: 'environment' },
+      { fps: 10, qrbox: (w, h) => { const s = Math.floor(Math.min(w, h) * 0.75); return { width: s, height: Math.floor(s * 0.6) }; } },
+      onDecoded, () => {});
+    scanning = true;
+    $('btn-cam').textContent = 'Tắt camera';
+    setStatus('Đưa mã vào khung để quét.');
+  } catch (e) {
+    $('reader').hidden = true;
+    setStatus('Không mở được camera. Kiểm tra quyền camera của trình duyệt, hoặc dùng "Chụp ảnh mã".', 'warn');
+  }
+}
+async function stopCam(){
+  if (scanning) { try { await scanner.stop(); } catch (e) {} }
+  scanning = false;
+  $('reader').hidden = true;
+  $('btn-cam').textContent = 'Mở camera quét';
+}
+$('btn-cam').onclick = () => {
+  if (scanning) return stopCam().then(() => setStatus('Đã tắt camera.'));
+  ensureFresh().then(startCam).catch(e => setStatus(e.message, 'err'));
+};
+
+function onDecoded(text){
+  if (busy) return;
+  const code = parseCode(text, false);
+  if (!code) return setStatus('Mã không đúng dạng VAEC0-xxxx: ' + text, 'warn');
+  if (navigator.vibrate) navigator.vibrate(80);
+  stopCam();
+  lookup(code);
+}
+
+$('file-input').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  await stopCam();
+  setStatus('Đang đọc mã từ ảnh…');
+  try {
+    if (!fileScanner) fileScanner = new Html5Qrcode('reader-file', opts());
+    const text = await fileScanner.scanFile(f, false);
+    const code = parseCode(text, false);
+    if (!code) return setStatus('Mã trong ảnh không đúng dạng VAEC0-xxxx: ' + text, 'warn');
+    lookup(code);
+  } catch (err) {
+    setStatus('Không đọc được mã trong ảnh. Chụp gần, đủ sáng, mã nằm thẳng.', 'err');
+  }
+};
+
+$('manual').onsubmit = e => {
+  e.preventDefault();
+  const code = parseCode($('code-input').value, true);
+  if (!code) return setStatus('Mã nhập không hợp lệ.', 'warn');
+  ensureFresh().then(() => { stopCam(); lookup(code); }).catch(err => setStatus(err.message, 'err'));
+};
+
+// ================= TRA CỨU + ĐỐI CHIẾU =================
+let current = [], currentCode = '', currentFile = '', photoUrl = null, logged = false;
+
+function banner(kind, title, sub){
+  const b = $('banner');
+  b.className = 'banner ' + kind;
+  b.innerHTML = '';
+  const c = document.createElement('div'); c.className = 'code'; c.textContent = title;
+  const s = document.createElement('span'); s.textContent = sub;
+  b.append(c, s);
+}
+
+async function lookup(code){
+  busy = true; logged = false; currentCode = code; currentFile = '';
+  $('code-input').value = label(code);
+  $('note').value = ''; $('logged').textContent = '';
+  setStatus('Đang kiểm tra ' + label(code) + '…');
+  try {
+    current = await findFiles(code);
+    $('result').hidden = false;
+    if (!current.length) {
+      banner('errb', label(code), 'KHÔNG có trong hệ thống. Giữ thẻ và báo trưởng ca.');
+      $('photo').hidden = true; $('chips').innerHTML = ''; $('r-meta').textContent = '';
+      $('verify').hidden = true; $('r-drive').hidden = true;
+      setStatus('Thẻ không có ảnh đăng ký.', 'err');
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      await logCheck(code, 'Không có trong hệ thống', '');
+      logged = true;
+    } else {
+      banner('okb', label(code), 'Có trong hệ thống' + (current.length > 1 ? ' · ' + current.length + ' ảnh' : '') + '. Đối chiếu ảnh với người cầm thẻ.');
+      $('verify').hidden = false; $('r-drive').hidden = false;
+      setVerifyEnabled(true);
+      await showImage(0);
+    }
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    if (!(e instanceof AuthError)) setStatus('Lỗi: ' + e.message, 'err');
+  } finally { busy = false; }
+}
+
+async function showImage(i){
+  const f = current[i];
+  currentFile = f.name;
+  $('r-drive').href = 'https://drive.google.com/file/d/' + f.id + '/view';
+  $('r-meta').textContent = f.name + (shotTime(f.name) ? ' · chụp ' + shotTime(f.name) : '');
+  const box = $('chips'); box.innerHTML = '';
+  if (current.length > 1) current.forEach((x, k) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip';
+    b.textContent = shotTime(x.name) || x.name;
+    b.setAttribute('aria-current', k === i);
+    b.onclick = () => showImage(k).catch(e => setStatus('Lỗi: ' + e.message, 'err'));
+    box.append(b);
+  });
+  setStatus('Đang tải ảnh…');
+  const r = await api(DRIVE + '/' + f.id + '?alt=media&supportsAllDrives=true');
+  if (!r.ok) throw new Error('Không tải được ảnh (lỗi ' + r.status + ')');
+  const blob = await r.blob();
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+  photoUrl = URL.createObjectURL(blob);
+  $('photo').src = photoUrl; $('photo').hidden = false;
+  setStatus('Đối chiếu ảnh rồi chọn kết quả.', 'ok');
+}
+
+function setVerifyEnabled(on){ $('btn-match').disabled = !on; $('btn-nomatch').disabled = !on; }
+async function verify(result){
+  if (logged) return;
+  logged = true; setVerifyEnabled(false);
+  if (result !== 'Đúng người' && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  setStatus(result === 'Đúng người' ? 'Hợp lệ.' : 'Không khớp. Giữ thẻ và báo trưởng ca.', result === 'Đúng người' ? 'ok' : 'err');
+  await logCheck(currentCode, result, currentFile);
+}
+$('btn-match').onclick = () => verify('Đúng người');
+$('btn-nomatch').onclick = () => verify('Không khớp');
+
+$('btn-next').onclick = () => {
+  window.scrollTo({ top: 0 });
+  ensureFresh().then(startCam).catch(e => setStatus(e.message, 'err'));
+};
+
+$('photo').onclick = () => { $('zoom-img').src = $('photo').src; $('zoom').hidden = false; };
+$('zoom-close').onclick = () => { $('zoom').hidden = true; };
+
+// ================= KHỞI ĐỘNG =================
+(function boot(){
+  if (window.google && google.accounts && google.accounts.oauth2 && !tokenClient) onGisLoad();
+  const t = sess.get('tok'), e = Number(sess.get('exp')) || 0;
+  if (t && e > Date.now() + 60000) { token = t; tokenExp = e; afterLogin(); }
+})();
+</script>
+</body>
+</html>
