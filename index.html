@@ -72,23 +72,6 @@
 
   <div id="app" hidden style="display:grid;gap:10px">
     <section class="panel">
-      <div class="stats">
-        <div class="stat main"><b id="s-cards">…</b><span>Thẻ trong công ty</span></div>
-        <div class="stat"><b id="s-today">0</b><span>Bạn đã kiểm tra hôm nay</span></div>
-        <div class="stat"><b id="s-bad" class="err">0</b><span>Vi phạm hôm nay</span></div>
-      </div>
-      <div class="row" style="align-items:center">
-        <span id="s-meta" class="meta">Đang đếm…</span>
-        <button id="btn-refresh" class="small" type="button" style="flex:0 0 auto">Làm mới</button>
-      </div>
-      <details>
-        <summary>Danh sách mã thẻ</summary>
-        <input id="list-filter" class="codein" type="text" placeholder="Lọc mã…" autocomplete="off" style="margin-top:8px">
-        <div id="code-list" class="chips"></div>
-      </details>
-    </section>
-
-    <section class="panel">
       <input id="place" type="text" placeholder="Vị trí kiểm tra (vd: Cổng 1, Hangar A2)" autocomplete="off">
       <div class="row">
         <button id="btn-cam" class="primary" type="button">Mở camera quét</button>
@@ -120,6 +103,23 @@
         <a id="r-drive" class="btn" target="_blank" rel="noopener">Mở trên Drive</a>
         <button id="btn-next" class="primary" type="button">Kiểm tra thẻ tiếp</button>
       </div>
+    </section>
+
+    <section id="stats" class="panel">
+      <div class="stats">
+        <div class="stat main"><b id="s-cards">…</b><span>Thẻ trong công ty</span></div>
+        <div class="stat"><b id="s-today">0</b><span>Bạn đã kiểm tra hôm nay</span></div>
+        <div class="stat"><b id="s-bad" class="err">0</b><span>Vi phạm hôm nay</span></div>
+      </div>
+      <div class="row" style="align-items:center">
+        <span id="s-meta" class="meta">Đang đếm…</span>
+        <button id="btn-refresh" class="small" type="button" style="flex:0 0 auto">Làm mới</button>
+      </div>
+      <details>
+        <summary>Danh sách mã thẻ</summary>
+        <input id="list-filter" class="codein" type="text" placeholder="Lọc mã…" autocomplete="off" style="margin-top:8px">
+        <div id="code-list" class="chips"></div>
+      </details>
     </section>
   </div>
 </main>
@@ -294,7 +294,7 @@ function renderList(){
 $('list-filter').oninput = renderList;
 $('btn-refresh').onclick = () => ensureFresh().then(loadStats).catch(e => setStatus(e.message, 'err'));
 
-const todayKey = () => 'checks-' + new Date().toLocaleDateString('sv-SE');
+const todayKey = () => 'checks-' + (userEmail || '-') + '-' + new Date().toLocaleDateString('sv-SE');
 function getToday(){ try { return JSON.parse(local.get(todayKey())) || { n: 0, bad: 0 }; } catch(e){ return { n: 0, bad: 0 }; } }
 function addToday(isBad){ const t = getToday(); t.n++; if (isBad) t.bad++; local.set(todayKey(), JSON.stringify(t)); renderToday(); }
 function renderToday(){ const t = getToday(); $('s-today').textContent = t.n; $('s-bad').textContent = t.bad; }
