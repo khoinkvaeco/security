@@ -130,11 +130,12 @@
 // ================= CẤU HÌNH =================
 const CLIENT_ID    = '87657856106-ie78sirdolp4f2s6op77h3r3ept3v97o.apps.googleusercontent.com';
 const FOLDER_ID    = '1tFHCwI826iLgvOwq6lep1phwi81OsV-9';
-const LOG_SHEET_ID = '';   // ID Google Sheet ghi nhật ký kiểm tra. Để '' nếu chưa dùng.
+const LOG_SHEET_ID = '1OG6UyyzUCnubrL1mMxREBJwiKleAHsQwM_ot4FJpmDg';   // Google Sheet ghi nhật ký kiểm tra. Để '' nếu chưa dùng.
 // ============================================
 
-const SCOPES = 'openid email https://www.googleapis.com/auth/drive.readonly' +
-               (LOG_SHEET_ID ? ' https://www.googleapis.com/auth/spreadsheets' : '');
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const SHEET_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'openid email ' + DRIVE_SCOPE + (LOG_SHEET_ID ? ' ' + SHEET_SCOPE : '');
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
 const $ = id => document.getElementById(id);
 const store = (s => ({
@@ -160,8 +161,10 @@ function onGisLoad(){
     client_id: CLIENT_ID, scope: SCOPES,
     callback: r => {
       if (r.error) return pending && pending.rej(new Error(r.error_description || r.error));
-      if (!google.accounts.oauth2.hasGrantedAllScopes(r, 'https://www.googleapis.com/auth/drive.readonly'))
+      if (!google.accounts.oauth2.hasGrantedAllScopes(r, DRIVE_SCOPE))
         return pending && pending.rej(new Error('Bạn cần tick cho phép xem file Google Drive.'));
+      if (LOG_SHEET_ID && !google.accounts.oauth2.hasGrantedAllScopes(r, SHEET_SCOPE))
+        return pending && pending.rej(new Error('Bạn cần tick cho phép ghi Google Sheets (nhật ký kiểm tra).'));
       token = r.access_token;
       tokenExp = Date.now() + (Number(r.expires_in) - 60) * 1000;
       sess.set('tok', token); sess.set('exp', String(tokenExp));
@@ -237,22 +240,57 @@ function parseCode(raw, allowBare){
   return null;
 }
 const label = code => 'VAEC0-' + code.toUpperCase();
+// Tên file ảnh: <mã>-<MMDDhhmmss>.jpg, chấp nhận cả tiền tố "VAEC0-".
+function fileCode(name){
+  const m = String(name).match(/^(?:VAEC[O0][-_\s]*)?([A-Za-z0-9]+)-/i);
+  return m ? m[1].toLowerCase() : null;
+}
 function shotTime(name){
   const m = name.match(/-(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\./);
   return m ? m[2] + '/' + m[1] + ' ' + m[3] + ':' + m[4] + ':' + m[5] : '';
 }
 
 // ================= DRIVE =================
-const baseQ = "'" + FOLDER_ID + "' in parents and trashed = false and mimeType contains 'image/'";
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+const inParents = ids => '(' + ids.map(id => "'" + id + "' in parents").join(' or ') + ')';
 function listUrl(q, fields, pageToken){
   const p = { q: q, pageSize: '1000', fields: fields, orderBy: 'modifiedTime desc',
               supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' };
   if (pageToken) p.pageToken = pageToken;
   return DRIVE + '?' + new URLSearchParams(p);
 }
+// Liệt kê mọi file con trực tiếp của các thư mục ids (chia nhóm để câu truy vấn không quá dài).
+async function listIn(ids, extraQ, fields){
+  let out = [];
+  for (let i = 0; i < ids.length; i += 40) {
+    const q = inParents(ids.slice(i, i + 40)) + ' and trashed = false' + extraQ;
+    let pageToken = '';
+    do {
+      const j = await apiJson(listUrl(q, 'nextPageToken,files(' + fields + ')', pageToken));
+      out = out.concat(j.files || []);
+      pageToken = j.nextPageToken || '';
+    } while (pageToken);
+  }
+  return out;
+}
+// Thư mục gốc + toàn bộ thư mục con (mọi cấp).
+let foldersP = null;
+function getFolders(force){
+  if (force || !foldersP) foldersP = (async () => {
+    const all = [FOLDER_ID];
+    let level = [FOLDER_ID];
+    while (level.length) {
+      level = (await listIn(level, " and mimeType = '" + FOLDER_MIME + "'", 'id')).map(f => f.id).filter(id => !all.includes(id));
+      all.push(...level);
+    }
+    return all;
+  })().catch(e => { foldersP = null; throw e; });
+  return foldersP;
+}
 async function findFiles(code){
-  const j = await apiJson(listUrl(baseQ + " and name contains '" + code + "'", 'files(id,name,size,modifiedTime)'));
-  return (j.files || []).filter(f => f.name.toLowerCase().startsWith(code + '-'));
+  const files = await listIn(await getFolders(), " and mimeType contains 'image/' and name contains '" + code + "'", 'id,name,size,modifiedTime');
+  return files.filter(f => fileCode(f.name) === code)
+              .sort((a, b) => String(b.modifiedTime).localeCompare(String(a.modifiedTime)));
 }
 
 // ================= THỐNG KÊ =================
@@ -260,21 +298,22 @@ let allCodes = [];
 async function loadStats(){
   $('s-meta').textContent = 'Đang đếm…';
   try {
-    let pageToken = '', files = [];
-    do {
-      const j = await apiJson(listUrl(baseQ, 'nextPageToken,files(name)', pageToken));
-      files = files.concat(j.files || []);
-      pageToken = j.nextPageToken || '';
-    } while (pageToken);
-    const counts = {};
-    files.forEach(f => {
-      const i = f.name.indexOf('-');
-      if (i > 0) { const c = f.name.slice(0, i).toLowerCase(); counts[c] = (counts[c] || 0) + 1; }
-    });
-    allCodes = Object.keys(counts).sort();
-    $('s-cards').textContent = allCodes.length.toLocaleString('vi-VN');
-    $('s-meta').textContent = files.length.toLocaleString('vi-VN') + ' ảnh · cập nhật ' +
-      new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const folders = await getFolders(true);
+    const files = await listIn(folders, " and mimeType != '" + FOLDER_MIME + "'", 'name,mimeType');
+    const images = files.filter(f => /^image\//.test(f.mimeType));
+    const codes = new Set();
+    let badName = 0;
+    images.forEach(f => { const c = fileCode(f.name); if (c) codes.add(c); else badName++; });
+    allCodes = [...codes].sort();
+    const n = x => x.toLocaleString('vi-VN');
+    const parts = [n(images.length) + ' ảnh'];
+    if (folders.length > 1) parts.push(n(folders.length - 1) + ' thư mục con');
+    if (files.length > images.length) parts.push(n(files.length - images.length) + ' file không phải ảnh (bỏ qua)');
+    if (badName) parts.push(n(badName) + ' ảnh sai tên (bỏ qua)');
+    parts.push('cập nhật ' + new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }));
+    $('s-cards').textContent = n(allCodes.length);
+    $('s-meta').textContent = parts.join(' · ');
+    if (!files.length) $('s-meta').textContent += ' — thư mục ảnh đang trống hoặc tài khoản chưa được chia sẻ ảnh.';
     renderList();
   } catch (e) {
     $('s-cards').textContent = '–';
@@ -287,7 +326,7 @@ function renderList(){
   allCodes.filter(c => !f || c.includes(f)).forEach(c => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'chip'; b.textContent = c.toUpperCase();
-    b.onclick = () => ensureFresh().then(() => { stopCam(); lookup(c); }).catch(e => setStatus(e.message, 'err'));
+    b.onclick = () => mustVerifyFirst() || ensureFresh().then(() => { stopCam(); lookup(c); }).catch(e => setStatus(e.message, 'err'));
     box.append(b);
   });
 }
@@ -321,6 +360,14 @@ async function logCheck(code, result, fileName){
   }
 }
 
+// Thẻ đang hiển thị mà chưa chọn "Đúng người"/"Không khớp" thì không cho sang thẻ khác.
+function mustVerifyFirst(){
+  if ($('result').hidden || logged) return false;
+  setStatus('Chọn "Đúng người" hoặc "Không khớp" cho ' + label(currentCode) + ' trước khi kiểm tra thẻ khác.', 'warn');
+  $('verify').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return true;
+}
+
 // ================= CAMERA =================
 let scanner = null, fileScanner = null, scanning = false, busy = false;
 const fmts = () => Object.values(Html5QrcodeSupportedFormats).filter(v => typeof v === 'number');
@@ -351,6 +398,7 @@ async function stopCam(){
   $('btn-cam').textContent = 'Mở camera quét';
 }
 $('btn-cam').onclick = () => {
+  if (!scanning && mustVerifyFirst()) return;
   if (scanning) return stopCam().then(() => setStatus('Đã tắt camera.'));
   ensureFresh().then(startCam).catch(e => setStatus(e.message, 'err'));
 };
@@ -366,7 +414,7 @@ function onDecoded(text){
 
 $('file-input').onchange = async e => {
   const f = e.target.files[0]; e.target.value = '';
-  if (!f) return;
+  if (!f || mustVerifyFirst()) return;
   await stopCam();
   setStatus('Đang đọc mã từ ảnh…');
   try {
@@ -382,6 +430,7 @@ $('file-input').onchange = async e => {
 
 $('manual').onsubmit = e => {
   e.preventDefault();
+  if (mustVerifyFirst()) return;
   const code = parseCode($('code-input').value, true);
   if (!code) return setStatus('Mã nhập không hợp lệ.', 'warn');
   ensureFresh().then(() => { stopCam(); lookup(code); }).catch(err => setStatus(err.message, 'err'));
@@ -400,7 +449,7 @@ function banner(kind, title, sub){
 }
 
 async function lookup(code){
-  busy = true; logged = false; currentCode = code; currentFile = '';
+  busy = true; currentCode = code; currentFile = '';
   $('code-input').value = label(code);
   $('note').value = ''; $('logged').textContent = '';
   setStatus('Đang kiểm tra ' + label(code) + '…');
@@ -413,10 +462,11 @@ async function lookup(code){
       $('verify').hidden = true; $('r-drive').hidden = true;
       setStatus('Thẻ không có ảnh đăng ký.', 'err');
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      await logCheck(code, 'Không có trong hệ thống', '');
       logged = true;
+      await logCheck(code, 'Không có trong hệ thống', '');
     } else {
       banner('okb', label(code), 'Có trong hệ thống' + (current.length > 1 ? ' · ' + current.length + ' ảnh' : '') + '. Đối chiếu ảnh với người cầm thẻ.');
+      logged = false;
       $('verify').hidden = false; $('r-drive').hidden = false;
       setVerifyEnabled(true);
       await showImage(0);
@@ -463,6 +513,7 @@ $('btn-match').onclick = () => verify('Đúng người');
 $('btn-nomatch').onclick = () => verify('Không khớp');
 
 $('btn-next').onclick = () => {
+  if (mustVerifyFirst()) return;
   window.scrollTo({ top: 0 });
   ensureFresh().then(startCam).catch(e => setStatus(e.message, 'err'));
 };
