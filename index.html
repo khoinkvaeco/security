@@ -241,13 +241,14 @@ function parseCode(raw, allowBare){
   return null;
 }
 const label = code => 'VAEC0-' + code.toUpperCase();
-// Tên file ảnh: <mã>-<MMDDhhmmss>.jpg, chấp nhận cả tiền tố "VAEC0-".
+// Tên file ảnh: <mã>-<MMDDhhmmss>.jpg; ảnh chụp thêm của cùng thẻ: <mã>_2-<MMDDhhmmss>_v.jpg.
+// Chấp nhận cả tiền tố "VAEC0-".
 function fileCode(name){
-  const m = String(name).match(/^(?:VAEC[O0][-_\s]*)?([A-Za-z0-9]+)-/i);
+  const m = String(name).match(/^(?:VAEC[O0][-_\s]*)?([A-Za-z0-9]+)(?:_[A-Za-z0-9]+)?-/i);
   return m ? m[1].toLowerCase() : null;
 }
 function shotTime(name){
-  const m = name.match(/-(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\./);
+  const m = name.match(/-(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:_[A-Za-z0-9]+)?\./);
   return m ? m[2] + '/' + m[1] + ' ' + m[3] + ':' + m[4] + ':' + m[5] : '';
 }
 
@@ -488,7 +489,7 @@ async function showImage(i){
   if (current.length > 1) current.forEach((x, k) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'chip';
-    b.textContent = shotTime(x.name) || x.name;
+    b.textContent = 'Ảnh ' + (k + 1) + (shotTime(x.name) ? ' · ' + shotTime(x.name) : '');
     b.setAttribute('aria-current', k === i);
     b.onclick = () => showImage(k).catch(e => setStatus('Lỗi: ' + e.message, 'err'));
     box.append(b);
