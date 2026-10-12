@@ -130,6 +130,7 @@
 // ================= CẤU HÌNH =================
 const CLIENT_ID    = '87657856106-ie78sirdolp4f2s6op77h3r3ept3v97o.apps.googleusercontent.com';
 const FOLDER_ID    = '1tFHCwI826iLgvOwq6lep1phwi81OsV-9';
+const VERIFY_ENABLED = false;  // true: bắt chọn "Đúng người"/"Không khớp" sau khi xem ảnh. false: chỉ hiện ảnh.
 const LOG_SHEET_ID = '1OG6UyyzUCnubrL1mMxREBJwiKleAHsQwM_ot4FJpmDg';   // Google Sheet ghi nhật ký kiểm tra. Để '' nếu chưa dùng.
 // ============================================
 
@@ -345,7 +346,7 @@ const pad = n => String(n).padStart(2, '0');
 function nowStr(){ const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
 
 async function logCheck(code, result, fileName){
-  addToday(result !== 'Đúng người');
+  addToday(result === 'Không khớp' || result === 'Không có trong hệ thống');
   if (!LOG_SHEET_ID) { $('logged').textContent = 'Đã ghi nhận trên máy này (chưa cấu hình Sheet nhật ký).'; return; }
   $('logged').textContent = 'Đang ghi nhật ký…';
   try {
@@ -459,17 +460,18 @@ async function lookup(code){
     if (!current.length) {
       banner('errb', label(code), 'KHÔNG có trong hệ thống. Giữ thẻ và báo trưởng ca.');
       $('photo').hidden = true; $('chips').innerHTML = ''; $('r-meta').textContent = '';
-      $('verify').hidden = true; $('r-drive').hidden = true;
+      $('verify').hidden = $('note').hidden = true; $('r-drive').hidden = true;
       setStatus('Thẻ không có ảnh đăng ký.', 'err');
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       logged = true;
       await logCheck(code, 'Không có trong hệ thống', '');
     } else {
-      banner('okb', label(code), 'Có trong hệ thống' + (current.length > 1 ? ' · ' + current.length + ' ảnh' : '') + '. Đối chiếu ảnh với người cầm thẻ.');
-      logged = false;
-      $('verify').hidden = false; $('r-drive').hidden = false;
-      setVerifyEnabled(true);
+      banner('okb', label(code), 'Có trong hệ thống' + (current.length > 1 ? ' · ' + current.length + ' ảnh' : '') + (VERIFY_ENABLED ? '. Đối chiếu ảnh với người cầm thẻ.' : '.'));
+      $('r-drive').hidden = false;
+      $('verify').hidden = $('note').hidden = !VERIFY_ENABLED;
+      if (VERIFY_ENABLED) { logged = false; setVerifyEnabled(true); }
       await showImage(0);
+      if (!VERIFY_ENABLED) { logged = true; await logCheck(code, 'Có trong hệ thống', currentFile); }
     }
     $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) {
@@ -498,7 +500,7 @@ async function showImage(i){
   if (photoUrl) URL.revokeObjectURL(photoUrl);
   photoUrl = URL.createObjectURL(blob);
   $('photo').src = photoUrl; $('photo').hidden = false;
-  setStatus('Đối chiếu ảnh rồi chọn kết quả.', 'ok');
+  setStatus(VERIFY_ENABLED ? 'Đối chiếu ảnh rồi chọn kết quả.' : 'Đối chiếu ảnh với người cầm thẻ.', 'ok');
 }
 
 function setVerifyEnabled(on){ $('btn-match').disabled = !on; $('btn-nomatch').disabled = !on; }
