@@ -1,6 +1,6 @@
 {
-  "name": "Kiểm tra thẻ VAECO",
-  "short_name": "Kiểm tra thẻ",
+  "name": "VAECO security system",
+  "short_name": "VAECO security system",
   "description": "Quét QR / barcode thẻ VAEC0 và đối chiếu ảnh đăng ký.",
   "lang": "vi",
   "start_url": "./",
