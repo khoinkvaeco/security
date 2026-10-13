@@ -1,0 +1,17 @@
+{
+  "name": "Kiểm tra thẻ VAECO",
+  "short_name": "Kiểm tra thẻ",
+  "description": "Quét QR / barcode thẻ VAEC0 và đối chiếu ảnh đăng ký.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f5f7",
+  "theme_color": "#0b5fa5",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

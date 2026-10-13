@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kiểm tra thẻ VAECO</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b5fa5">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kiểm tra thẻ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="window.onGisLoad && onGisLoad()"></script>
 <style>
@@ -14,7 +22,7 @@
   *{box-sizing:border-box}
   [hidden]{display:none!important}
   body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Roboto,Arial,sans-serif}
-  main{max-width:640px;margin:0 auto;padding:12px 16px 24px;display:grid;gap:10px}
+  main{max-width:640px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));display:grid;gap:10px}
   header{display:flex;justify-content:space-between;align-items:center;gap:8px}
   h1{font-size:18px;margin:0}
   h1 small{display:block;font-size:12px;font-weight:400;color:var(--muted)}
@@ -62,6 +70,7 @@
     <h1>Kiểm tra thẻ ngẫu nhiên<small>Quét QR / barcode VAEC0-xxxx</small></h1>
     <div id="who" class="meta" style="text-align:right" hidden>
       <div id="who-email"></div>
+      <button id="btn-install" class="small" type="button" hidden>Cài ứng dụng</button>
       <button id="btn-logout" class="small" type="button">Đăng xuất</button>
     </div>
   </header>
@@ -533,6 +542,17 @@ $('btn-next').onclick = () => {
 };
 
 $('zoom-close').onclick = () => { $('zoom').hidden = true; };
+
+// ================= CÀI ỨNG DỤNG (Android/Chrome) =================
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; $('btn-install').hidden = false; });
+window.addEventListener('appinstalled', () => { installPrompt = null; $('btn-install').hidden = true; });
+$('btn-install').onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => {});
+  installPrompt = null; $('btn-install').hidden = true;
+};
 
 // ================= KHỞI ĐỘNG =================
 (function boot(){
